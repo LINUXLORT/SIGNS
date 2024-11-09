@@ -31,6 +31,7 @@ function [mask Images] = DetectRedArea(original)
     % subplot(2,1,2)
     % imshow(equalized)
     
+    % Thrshold for read area
     selectedth = [170 255; 0 100; 0 100];
     
     % make the selection as a closed box
@@ -45,36 +46,54 @@ function [mask Images] = DetectRedArea(original)
     kernel = strel('disk',1);
     full_mask = imopen(selectedmask_raw,kernel);
     
+    % Plot original Image
     figure
     imshow(original)
+
+    % Get regionprops
     Ilabel = bwlabel(full_mask);
     stats_stop = regionprops(Ilabel,'centroid','Area','BoundingBox');
     count = 1;
+
     hold on;
     for i=1:numel(stats_stop)
-        %Finding the center of mass for every cell
+        % Determine if this has to be selected and threshold of selection
         area_threshold = 0.3*max(vertcat(stats_stop.Area));
         max_threshold = 400000;
         if(stats_stop(i).Area >= area_threshold && stats_stop(i).Area <= max_threshold)
+            
+            %Obtain centroids
             centroid=stats_stop(i).Centroid;
             x=centroid(1);
             y=centroid(2);
+            
+            %Obtain bouding box
             bb = stats_stop(i).BoundingBox;
+
+            %Plot centroid and bouding box
             plot(x,y,'k*')
             R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3);
+
+            %Save image info to info_array
             info_array = [x y bb];
 
+            % Obtain the regions to crop the detected area
             x_region = ceil(R.Position(1)):ceil(R.Position(1)+R.Position(3));
             y_region = ceil(R.Position(2)):ceil(R.Position(2)+R.Position(4));
             Cropped = original(y_region,x_region,:);
-            Images(count) = struct('Image',Cropped,'Info',info_array);
 
+            % Generate array of structs. Each array has an image and info
+            Images(count) = struct('Image',Cropped,'Info',info_array);
+    
+            % Continue counting
             count = count + 1;
         end
         % text(x-20, y+10, ['R = ' num2str(R)], 'Color', 'g', 'FontSize', 8);
         % text(x-20, y+20, ['C = ' num2str(C)], 'Color', 'g', 'FontSize', 8);
     end
     hold off;
+
+    % Plot the mask were stop sign should appear
     figure 
     imshow(full_mask)
     mask = full_mask;
