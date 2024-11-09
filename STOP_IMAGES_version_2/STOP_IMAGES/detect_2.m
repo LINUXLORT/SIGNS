@@ -7,17 +7,30 @@ close all; clear;clc;
 % original = imread('AEKG21HVX56P.jpg'); % Load original ColoredChips.png image
 % original = imread('TQZCYHGU0XU4.jpg'); % Load original ColoredChips.png image
 
-% original = imread('OYV7QKFNOXAY.jpg'); % Load original ColoredChips.png image
+original = imread('OYV7QKFNOXAY.jpg'); % Load original ColoredChips.png image
 % original = imread('2MJA5JQAE97S.jpg'); % Load original ColoredChips.png image
-original = imread('6VU0VCJ4K9J7.jpg'); % Load original ColoredChips.png image
+% original = imread('6VU0VCJ4K9J7.jpg'); % Load original ColoredChips.png image
 % original = imread('63W080M63GWW.jpg'); % Load original ColoredChips.png image
 % original = imread('94RU6IX02HZR.jpg'); % Load original ColoredChips.png image
 % original = imread('VDKUHQ30J203.jpg'); % Load original ColoredChips.png image
 
 [mask Images] = DetectRedArea(original);
 plotCroppedImages(Images)
+[info] = DetectSTOPWordFromImages(Images(1).Image);
 
-% Now the Images with cropped zones where stop should be read are available
+function [info_region] = DetectSTOPWordFromImages(Image)
+    Image = im2gray(Image)
+    Image_Binarized = imbinarize(Image)  
+    figure
+    imshow(Image_Binarized)
+    [Labeled numberofelements] = bwlabel(Image_Binarized)
+    info_region = regionprops(Labeled,'all')
+    for i = 1:length(info_region)
+        figure
+        imshow(info_region(i).Image);
+    end
+end
+
 function plotCroppedImages(Images)
     for i = 1:length(Images)
         figure
@@ -88,6 +101,8 @@ function [mask Images] = DetectRedArea(original)
             % Obtain the regions to crop the detected area
             x_region = ceil(R.Position(1)):ceil(R.Position(1)+R.Position(3));
             y_region = ceil(R.Position(2)):ceil(R.Position(2)+R.Position(4));
+
+            % Pad image to avoind conflicts with index when ceilling
             padded_image = padarray(original,[1 1],1,'both')
             Cropped = padded_image(y_region,x_region,:);
 
