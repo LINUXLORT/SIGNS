@@ -1,6 +1,6 @@
 close all; clear;clc;
 
-original = imread('ATBV51FNQW5O.jpg'); % Load original ColoredChips.png image
+% original = imread('ATBV51FNQW5O.jpg'); % Load original ColoredChips.png image
 % original = imread('0IWYSA892WEA.jpg'); % Load original ColoredChips.png image
 % original = imread('6B16XQW53PXG.jpg'); % Load original ColoredChips.png image
 % original = imread('ZNLUJY4758VA.jpg'); % Load original ColoredChips.png image
@@ -9,14 +9,22 @@ original = imread('ATBV51FNQW5O.jpg'); % Load original ColoredChips.png image
 
 % original = imread('OYV7QKFNOXAY.jpg'); % Load original ColoredChips.png image
 % original = imread('2MJA5JQAE97S.jpg'); % Load original ColoredChips.png image
-% original = imread('6VU0VCJ4K9J7.jpg'); % Load original ColoredChips.png image
+original = imread('6VU0VCJ4K9J7.jpg'); % Load original ColoredChips.png image
 % original = imread('63W080M63GWW.jpg'); % Load original ColoredChips.png image
 % original = imread('94RU6IX02HZR.jpg'); % Load original ColoredChips.png image
 % original = imread('VDKUHQ30J203.jpg'); % Load original ColoredChips.png image
 
 [mask Images] = DetectRedArea(original);
-figure
-imshow(Images(1).Image)
+plotCroppedImages(Images)
+
+% Now the Images with cropped zones where stop should be read are available
+function plotCroppedImages(Images)
+    for i = 1:length(Images)
+        figure
+        imshow(Images(i).Image)
+    end
+end
+
 
 function [mask Images] = DetectRedArea(original)
     %Filter the original image a little
@@ -80,7 +88,8 @@ function [mask Images] = DetectRedArea(original)
             % Obtain the regions to crop the detected area
             x_region = ceil(R.Position(1)):ceil(R.Position(1)+R.Position(3));
             y_region = ceil(R.Position(2)):ceil(R.Position(2)+R.Position(4));
-            Cropped = original(y_region,x_region,:);
+            padded_image = padarray(original,[1 1],1,'both')
+            Cropped = padded_image(y_region,x_region,:);
 
             % Generate array of structs. Each array has an image and info
             Images(count) = struct('Image',Cropped,'Info',info_array);
@@ -93,9 +102,9 @@ function [mask Images] = DetectRedArea(original)
     end
     hold off;
 
-    % Plot the mask were stop sign should appear
-    figure 
-    imshow(full_mask)
+    % % Plot the mask were stop sign should appear
+    % figure 
+    % imshow(full_mask)
     mask = full_mask;
 end
 
