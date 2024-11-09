@@ -1,6 +1,6 @@
 close all; clear;clc;
 
-% original = imread('ATBV51FNQW5O.jpg'); % Load original ColoredChips.png image
+original = imread('ATBV51FNQW5O.jpg'); % Load original ColoredChips.png image
 % original = imread('0IWYSA892WEA.jpg'); % Load original ColoredChips.png image
 % original = imread('6B16XQW53PXG.jpg'); % Load original ColoredChips.png image
 % original = imread('ZNLUJY4758VA.jpg'); % Load original ColoredChips.png image
@@ -12,7 +12,7 @@ close all; clear;clc;
 % original = imread('6VU0VCJ4K9J7.jpg'); % Load original ColoredChips.png image
 % original = imread('63W080M63GWW.jpg'); % Load original ColoredChips.png image
 % original = imread('94RU6IX02HZR.jpg'); % Load original ColoredChips.png image
-original = imread('VDKUHQ30J203.jpg'); % Load original ColoredChips.png image
+% original = imread('VDKUHQ30J203.jpg'); % Load original ColoredChips.png image
 
 [mask info_array] = DetectRedArea(original);
 
@@ -41,11 +41,11 @@ function [mask info_array] = DetectRedArea(original)
     
     % morphologicat processing
     kernel = strel('disk',1);
-    full_image = imopen(selectedmask_raw,kernel);
+    full_mask = imopen(selectedmask_raw,kernel);
     
     figure
     imshow(original)
-    Ilabel = bwlabel(full_image);
+    Ilabel = bwlabel(full_mask);
     stats_stop = regionprops(Ilabel,'centroid','Area','BoundingBox');
     count = 1;
     hold on;
@@ -57,15 +57,23 @@ function [mask info_array] = DetectRedArea(original)
             centroid=stats_stop(i).Centroid;
             x=centroid(1);
             y=centroid(2);
-            bb = stats_stop(i).BoundingBox
-            info_array(count,:) = [x y bb]
+            bb = stats_stop(i).BoundingBox;
             plot(x,y,'k*')
-            rectangle('Position',bb,'EdgeColor','b','LineWidth',3)
+            R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3);
+            info_array(count,:) = [x y bb];
             count = count + 1;
+
+            x_region = ceil(R.Position(1)):ceil(R.Position(1)+R.Position(3));
+            y_region = ceil(R.Position(2)):ceil(R.Position(2)+R.Position(4));
+            Cropped = original(y_region,x_region,:);
         end
         % text(x-20, y+10, ['R = ' num2str(R)], 'Color', 'g', 'FontSize', 8);
         % text(x-20, y+20, ['C = ' num2str(C)], 'Color', 'g', 'FontSize', 8);
     end
     hold off;
-    mask = selectedmask_raw;
+    figure 
+    imshow(full_mask)
+    mask = full_mask;
 end
+
+
