@@ -14,9 +14,11 @@ original = imread('ATBV51FNQW5O.jpg'); % Load original ColoredChips.png image
 % original = imread('94RU6IX02HZR.jpg'); % Load original ColoredChips.png image
 % original = imread('VDKUHQ30J203.jpg'); % Load original ColoredChips.png image
 
-[mask info_array] = DetectRedArea(original);
+[mask Images] = DetectRedArea(original);
+figure
+imshow(Images(1).Image)
 
-function [mask info_array] = DetectRedArea(original)
+function [mask Images] = DetectRedArea(original)
     %Filter the original image a little
     filtered = imgaussfilt(original,1);
     
@@ -60,12 +62,14 @@ function [mask info_array] = DetectRedArea(original)
             bb = stats_stop(i).BoundingBox;
             plot(x,y,'k*')
             R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3);
-            info_array(count,:) = [x y bb];
-            count = count + 1;
+            info_array = [x y bb];
 
             x_region = ceil(R.Position(1)):ceil(R.Position(1)+R.Position(3));
             y_region = ceil(R.Position(2)):ceil(R.Position(2)+R.Position(4));
             Cropped = original(y_region,x_region,:);
+            Images(count) = struct('Image',Cropped,'Info',info_array);
+
+            count = count + 1;
         end
         % text(x-20, y+10, ['R = ' num2str(R)], 'Color', 'g', 'FontSize', 8);
         % text(x-20, y+20, ['C = ' num2str(C)], 'Color', 'g', 'FontSize', 8);
