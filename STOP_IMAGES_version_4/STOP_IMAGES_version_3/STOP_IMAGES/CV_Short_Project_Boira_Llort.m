@@ -7,7 +7,9 @@
 close all; clear;clc;
 
 % Load Input Image
-original = imread('4QJGNFEJ2DQM.jpg');
+% original = imread('9DY03ZX61ZJS.jpg');
+% original = imread('47M6AENC4X76.jpg');
+original = imread('AEKG21HVX56P.jpg');
 imshow(original)
 
 % Detect red areas
@@ -19,16 +21,8 @@ imshow(cut_image);
 
 % Detect if octagon is present
 [bool1] = DetectOctagon(cut_image);
-
+[bool2] = DetectSTOPWordFromImages(Images(1));
 % Detect STOP words
-if(bool1)
-    [bool2 info] = DetectSTOPWordFromImages(Images(1));
-end
-
-% Detect is the area is an octagon
-if(bool2)
-    disp('Sign Fully detected')
-end
 
 %% Functions used
 
@@ -150,7 +144,7 @@ function [bool info_region] = DetectSTOPWordFromImages(Image)
     Image_filtered = imgaussfilt(Image,1);
     Image_gray = im2gray(Image_filtered);
     equalized = imadjust(Image_gray);
-    Image_Binarized = imbinarize(equalized);
+    Image_Binarized = imclearborder(imbinarize(equalized));
     k = strel('disk',1);
     Image_Binarized = imerode(Image_Binarized,1);
     figure
@@ -184,14 +178,15 @@ function [bool] = DetectLettersSTOP(region_props, main_area)
     solidity = region_props.Solidity;
     extent = region_props.Extent;
 
-    if area < 0.2*main_area && area > 0.03*main_area
+    if area < 0.2*main_area && area > 0.02*main_area
         disp('This may be a letter')
-        if(IsS(eccentricity, solidity, extent) || IsT(eccentricity, solidity, extent)...
-                || IsO(eccentricity, solidity, extent) || IsP(eccentricity, solidity, extent))
-            bool = true;
-        else
-            bool = false;
-        end
+        % if(IsS(eccentricity, solidity, extent) || IsT(eccentricity, solidity, extent)...
+        %         || IsO(eccentricity, solidity, extent) || IsP(eccentricity, solidity, extent))
+        %     bool = true;
+        % else
+        %     bool = false;
+        % end
+        bool = true;
     else
         disp('Impossible letter')
         bool = false;
@@ -272,7 +267,7 @@ approxBoundary = B_max(1:round(end/8):end, :); % Approximate to 8 points
 if length(approxBoundary) == 8
     isOctagon = true;
 end
-
+pause(1)
 % Plot the boundary
 figure;
 imshow(img);
