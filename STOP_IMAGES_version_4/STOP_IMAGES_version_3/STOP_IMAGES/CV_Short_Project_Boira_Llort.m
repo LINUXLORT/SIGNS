@@ -157,19 +157,6 @@ function [bool info_region] = DetectSTOPWordFromImages(Image)
             if(DetectLettersSTOP(info_region(i), area_of_image))
                 counter = counter +1;
                 letter = info_region(i).Image;
-                TS = imread('template_S.jpg');
-                TS_g = im2gray(TS);
-                TS_b = imbinarize(TS_g);
-                TS_br = imresize(TS_b,size(letter));
-                corr = normxcorr2(TS_br,letter);
-                figure
-                subplot(1,3,1)
-                imshow(letter);
-                subplot(1,3,2)
-                imshow(TS_br);
-                subplot(1,3,3)
-                imshow(corr,[])
-                disp(max(max(corr)))
             end
         end
     end
@@ -183,62 +170,116 @@ function [bool info_region] = DetectSTOPWordFromImages(Image)
     end
 end
 
-function [bool] = DetectLettersSTOP(region_props, main_area)
-    area = region_props.Area;
-    eccentricity = region_props.Eccentricity;
-    solidity = region_props.Solidity;
-    extent = region_props.Extent;
-
+function [bool] = DetectLettersSTOP(region_props_letter, main_area)
+    area = region_props_letter.Area;
+    letter = region_props_letter.Image;
+    [height, width, ~] = size(letter);  % Get the height and width of the image
+    center_x = round(width / 2);  % X-coordinate of the center
+    center_y = round(height / 2);  % Y-coordinate of the center
+    zone_x = round(0.2*width);
+    zone_y = round(0.2*height);
     if area < 0.2*main_area && area > 0.02*main_area
         disp('This may be a letter')
-        % if(IsS(eccentricity, solidity, extent) || IsT(eccentricity, solidity, extent)...
-        %         || IsO(eccentricity, solidity, extent) || IsP(eccentricity, solidity, extent))
-        %     bool = true;
-        % else
-        %     bool = false;
-        % end
-        bool = true;
+        TS = imread('template_S.jpg');
+        TS_g = im2gray(TS);
+        TS_b = imbinarize(TS_g);
+        TS_br = imresize(TS_b,size(letter));
+        corr_S = normxcorr2(TS_br,letter);
+        corr_S_max = max(max(corr_S(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+
+        TT = imread('template_T.jpg');
+        TT_g = im2gray(TT);
+        TT_b = imbinarize(TT_g);
+        TT_br = imresize(TT_b,size(letter));
+        corr_T = normxcorr2(TT_br,letter);
+        corr_T_max = max(max(corr_T(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+
+        TO = imread('template_O.jpg');
+        TO_g = im2gray(TO);
+        TO_b = imbinarize(TO_g);
+        TO_br = imresize(TO_b,size(letter));
+        corr_O = normxcorr2(TO_br,letter);
+        corr_O_max = max(max(corr_O(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+
+        TP = imread('template_P.jpg');
+        TP_g = im2gray(TP);
+        TP_b = imbinarize(TP_g);
+        TP_br = imresize(TP_b,size(letter));
+        corr_P = normxcorr2(TP_br,letter);
+        corr_P_max = max(max(corr_P(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+
+        [~,index] = max([corr_S_max corr_T_max corr_O_max corr_P_max])
+        if index == 1 && index > 0.1
+            disp('S detected')
+            disp(corr_S_max)
+            figure
+            subplot(1,3,1)
+            imshow(letter)
+            subplot(1,3,2)
+            imshow(TS_br)
+            subplot(1,3,3);
+            imshow(corr_S,[]);
+            s = true;
+        else
+            s = false;
+        end
+
+        if index == 2 && index > 0.1
+            disp('T detected')
+            disp(corr_T_max)
+            figure
+            subplot(1,3,1)
+            imshow(letter)
+            subplot(1,3,2)
+            imshow(TT_br)
+            subplot(1,3,3);
+            imshow(corr_T,[]);
+            t = true;
+        else
+            t = false;
+        end
+
+        if index == 3 && index > 0.1
+            disp('O detected')
+            disp(corr_O_max)
+            figure
+            subplot(1,3,1)
+            imshow(letter)
+            subplot(1,3,2)
+            imshow(TO_br)
+            subplot(1,3,3);
+            imshow(corr_O,[]);
+            o = true;
+        else
+            o = false;
+        end
+
+        if index == 4 && index > 0.1
+            disp('P detected')
+            disp(corr_P_max)
+            figure
+            subplot(1,3,1)
+            imshow(letter)
+            subplot(1,3,2)
+            imshow(TP_br)
+            subplot(1,3,3);
+            imshow(corr_P,[]);
+            p = true;
+        else
+            p = false;
+        end
+
+        if(s || t || o || p)
+            bool = true;
+        else
+            bool = false;
+        end
     else
         disp('Impossible letter')
         bool = false;
     end
 end
 
-function bool = IsS(eccentricity, solidity, extent)
-    if(eccentricity < 0.9 && solidity > 0.5 && extent > 0.3 && extent < 0.8)
-        disp('S found');
-        bool = true;
-    else
-        bool = false;
-    end
-end
-
-function bool = IsO(eccentricity, solidity, extent)
-    if(eccentricity > 0.8 && eccentricity < 1.1 && solidity > 0.6 && extent < 0.9)
-        disp('O found');
-        bool = true;
-    else
-        bool = false;
-    end
-end
-
-function bool = IsT(eccentricity, solidity, extent)
-    if(eccentricity < 0.7 && solidity > 0.7 && extent > 0.7 && extent < 1.0)
-        disp('T found');
-        bool = true;
-    else
-        bool = false;
-    end
-end
-
-function bool = IsP(eccentricity, solidity, extent)
-    if(eccentricity < 0.9 && solidity > 0.6 && extent > 0.5 && extent < 0.8)
-        disp('P found');
-        bool = true;
-    else
-        bool = false;
-    end
-end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [bool] = DetectOctagon(img)
 % Convert the image to grayscale
