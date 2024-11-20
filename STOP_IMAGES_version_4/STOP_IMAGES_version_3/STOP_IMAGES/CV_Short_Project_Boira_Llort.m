@@ -157,8 +157,19 @@ function [bool info_region] = DetectSTOPWordFromImages(Image)
             if(DetectLettersSTOP(info_region(i), area_of_image))
                 counter = counter +1;
                 letter = info_region(i).Image;
+                TS = imread('template_S.jpg');
+                TS_g = im2gray(TS);
+                TS_b = imbinarize(TS_g);
+                TS_br = imresize(TS_b,size(letter));
+                corr = normxcorr2(TS_br,letter);
                 figure
+                subplot(1,3,1)
                 imshow(letter);
+                subplot(1,3,2)
+                imshow(TS_br);
+                subplot(1,3,3)
+                imshow(corr,[])
+                disp(max(max(corr)))
             end
         end
     end

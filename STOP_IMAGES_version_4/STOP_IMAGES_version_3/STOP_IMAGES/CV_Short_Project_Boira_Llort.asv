@@ -8,7 +8,8 @@ close all; clear;clc;
 
 % Load Input Image
 % original = imread('9DY03ZX61ZJS.jpg');
-original = imread('47M6AENC4X76.jpg');
+% original = imread('47M6AENC4X76.jpg');
+original = imread('AEKG21HVX56P.jpg');
 imshow(original)
 
 % Detect red areas
@@ -156,8 +157,15 @@ function [bool info_region] = DetectSTOPWordFromImages(Image)
             if(DetectLettersSTOP(info_region(i), area_of_image))
                 counter = counter +1;
                 letter = info_region(i).Image;
+                TS = imread('template_S.jpg');
+                TS_g = im2gray(TS);
+                TS_b = imbinarize(TS_g)
+                TS_br = imresize(TS_b,size(letter));
                 figure
+                subplot(1,3,1)
                 imshow(letter);
+                subplot(1,3,2)
+                imshow()
             end
         end
     end
@@ -177,15 +185,15 @@ function [bool] = DetectLettersSTOP(region_props, main_area)
     solidity = region_props.Solidity;
     extent = region_props.Extent;
 
-    if area < 0.2*main_area && area > 0.03*main_area
+    if area < 0.2*main_area && area > 0.02*main_area
         disp('This may be a letter')
-        if(IsS(eccentricity, solidity, extent) || IsT(eccentricity, solidity, extent)...
-                || IsO(eccentricity, solidity, extent) || IsP(eccentricity, solidity, extent))
-            bool = true;
-        else
-            bool = false;
-        end
-        bool = tue
+        % if(IsS(eccentricity, solidity, extent) || IsT(eccentricity, solidity, extent)...
+        %         || IsO(eccentricity, solidity, extent) || IsP(eccentricity, solidity, extent))
+        %     bool = true;
+        % else
+        %     bool = false;
+        % end
+        bool = true;
     else
         disp('Impossible letter')
         bool = false;
