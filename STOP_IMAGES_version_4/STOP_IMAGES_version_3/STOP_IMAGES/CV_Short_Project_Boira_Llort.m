@@ -9,7 +9,9 @@ close all; clear;clc;
 % Load Input Image
 % original = imread('9DY03ZX61ZJS.jpg');
 % original = imread('47M6AENC4X76.jpg');
-original = imread('AEKG21HVX56P.jpg');
+original = imread('6B16XQW53PXG.jpg');
+% original = imread('AEKG21HVX56P.jpg');
+% original = imread('7FK4JZSLTYT7.jpg');
 imshow(original)
 
 % Detect red areas
@@ -185,31 +187,51 @@ function [bool] = DetectLettersSTOP(region_props_letter, main_area)
         TS_b = imbinarize(TS_g);
         TS_br = imresize(TS_b,size(letter));
         corr_S = normxcorr2(TS_br,letter);
-        corr_S_max = max(max(corr_S(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+        size_S = size(corr_S);
+        zone_y = floor(size_S(1)/2);
+        zone_x = floor(size_S(2)/2);
+        shift_S_y = round(0.15*zone_y);
+        shift_S_x = round(0.15*zone_x);
+        corr_S_max = max(max(corr_S(zone_y-shift_S_y:zone_y+shift_S_y,zone_x-shift_S_x:zone_x+shift_S_x)));
 
         TT = imread('template_T.jpg');
         TT_g = im2gray(TT);
         TT_b = imbinarize(TT_g);
         TT_br = imresize(TT_b,size(letter));
         corr_T = normxcorr2(TT_br,letter);
-        corr_T_max = max(max(corr_T(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+        size_T = size(corr_T);
+        zone_y = floor(size_T(1)/2);
+        zone_x = floor(size_T(2)/2);
+        shift_T_y = round(0.15*zone_y);
+        shift_T_x = round(0.15*zone_x);
+        corr_T_max = max(max(corr_T(zone_y-shift_T_y:zone_y+shift_T_y,zone_x-shift_T_x:zone_x+shift_T_x)));
 
         TO = imread('template_O.jpg');
         TO_g = im2gray(TO);
         TO_b = imbinarize(TO_g);
         TO_br = imresize(TO_b,size(letter));
         corr_O = normxcorr2(TO_br,letter);
-        corr_O_max = max(max(corr_O(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+        size_O = size(corr_O);
+        zone_y = floor(size_O(1)/2);
+        zone_x = floor(size_O(2)/2);
+        shift_O_y = round(0.15*zone_y);
+        shift_O_x = round(0.15*zone_x);
+        corr_O_max = max(max(corr_O(zone_y-shift_O_y:zone_y+shift_O_y,zone_x-shift_O_x:zone_x+shift_O_x)));
 
         TP = imread('template_P.jpg');
         TP_g = im2gray(TP);
         TP_b = imbinarize(TP_g);
         TP_br = imresize(TP_b,size(letter));
         corr_P = normxcorr2(TP_br,letter);
-        corr_P_max = max(max(corr_P(center_x-zone_x:center_x+zone_x,center_y-zone_y:center_y+zone_y)));
+        size_P = size(corr_P);
+        zone_y = floor(size_P(1)/2);
+        zone_x = floor(size_P(2)/2);
+        shift_P_y = round(0.15*zone_y);
+        shift_P_x = round(0.15*zone_x);
+        corr_P_max = max(max(corr_P(zone_y-shift_P_y:zone_y+shift_P_y,zone_x-shift_P_x:zone_x+shift_P_x)));
 
-        [~,index] = max([corr_S_max corr_T_max corr_O_max corr_P_max])
-        if index == 1 && index > 0.1
+        [~,index] = max([corr_S_max corr_T_max corr_O_max corr_P_max]);
+        if index == 1 && corr_S_max > 0.4
             disp('S detected')
             disp(corr_S_max)
             figure
@@ -224,7 +246,7 @@ function [bool] = DetectLettersSTOP(region_props_letter, main_area)
             s = false;
         end
 
-        if index == 2 && index > 0.1
+        if index == 2 && corr_T_max > 0.4
             disp('T detected')
             disp(corr_T_max)
             figure
@@ -239,7 +261,7 @@ function [bool] = DetectLettersSTOP(region_props_letter, main_area)
             t = false;
         end
 
-        if index == 3 && index > 0.1
+        if index == 3 && corr_O_max > 0.4
             disp('O detected')
             disp(corr_O_max)
             figure
@@ -254,7 +276,7 @@ function [bool] = DetectLettersSTOP(region_props_letter, main_area)
             o = false;
         end
 
-        if index == 4 && index > 0.1
+        if index == 4 && corr_P_max > 0.1
             disp('P detected')
             disp(corr_P_max)
             figure
