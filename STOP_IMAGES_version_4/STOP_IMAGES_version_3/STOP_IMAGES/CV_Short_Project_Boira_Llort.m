@@ -304,59 +304,175 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [bool] = DetectOctagon(img)
-% Convert the image to grayscale
-grayImg = rgb2gray(img);
+    % DetectOctagon detects an octagonal shape in an input image.
+    % Inputs:
+    %   - img: RGB input image
+    % Outputs:
+    %   - bool: Logical value indicating whether an octagon was detected
 
-% Apply edge detection (Canny method)
-edges = edge(grayImg, 'Canny');
+    % Convert the image to grayscale and smooth it
+    grayImg = rgb2gray(img);
+    grayImg = imgaussfilt(grayImg, 2); % Gaussian filter to reduce noise
 
-% Fill in gaps using dilation and erosion to close edges
-se = strel('disk', 5);
-edges = imdilate(edges, se);
-edges = imerode(edges, se);
+    % Binarize the image adaptively
+    binImg = imbinarize(grayImg);
 
-% Find the boundaries of shapes in the binary image
-[B, ~] = bwboundaries(edges, 'noholes');
+    % Morphological operations to enhance binary image
+    % Dilate and complement to close gaps
+    se = strel('disk', 1); 
+    binImg = imdilate(binImg, se);
+    binImg = imcomplement(binImg);
 
-% Initialize variables to find the largest boundary
-max_size_B = 0;
-B_max = [];
+    % Remove objects connected to the image border
+    binImg = imclearborder(binImg);
 
-% Loop through each boundary to find the largest one
-for i = 1:length(B)
-    boundary = B{i};
-    if size(boundary, 1) > max_size_B
-        B_max = boundary;
-        max_size_B = size(boundary, 1);
+    % Edge detection using Canny method
+    edges = edge(binImg, 'Canny');
+
+    % Close gaps in edges using morphological operations
+    se = strel('disk', 5);
+    edges = imdilate(edges, se);
+    edges = imerode(edges, se);
+
+    % Find boundaries of connected components
+    [boundaries, ~] = bwboundaries(edges, 'noholes');
+
+    % Identify the largest boundary
+    largestBoundary = [];
+    maxBoundarySize = 0;
+    for i = 1:length(boundaries)
+        currentBoundary = boundaries{i};
+        if size(currentBoundary, 1) > maxBoundarySize
+            largestBoundary = currentBoundary;
+            maxBoundarySize = size(currentBoundary, 1);
+        end
+    end
+
+    % Approximate boundary to a polygon
+    % Use Douglas-Peucker algorithm to reduce boundary points
+    tolerance = 0.02; % Initial tolerance for approximation
+    approxBoundary = reducepoly(largestBoundary, tolerance);
+
+    % Handle cases where the approximated boundary has fewer/more than 8 sides
+    if size(approxBoundary, 1) ~= 8
+        if size(approxBoundary, 1) < 8
+            tolerance = tolerance / 2;
+        else
+            tolerance = tolerance * 1.5;
+        end
+        approxBoundary = reducepoly(largestBoundary, tolerance);
+    end
+
+    % Check if the approximated boundary now approx has 8 sides
+    isOctagon = (size(approxBoundary, 1)) < 10 && (size(approxBoundary, 1)) > 6 ;
+
+    % Plot results
+    figure;
+    imshow(img);
+    hold on;
+    plot(largestBoundary(:, 2), largestBoundary(:, 1), 'r', 'LineWidth', 2); % Original boundary
+    if ~isempty(approxBoundary)
+        plot(approxBoundary(:, 2), approxBoundary(:, 1), 'g', 'LineWidth', 2); % Approximated boundary
+    end
+    title('Detected Octagon (Stop Sign)');
+
+    % Output result
+    if isOctagon
+        disp('Detected an octagon (likely a stop sign)');
+        bool = true;
+    else
+        disp('No octagon detected');
+        bool = false;
     end
 end
 
-% Initialize flag for octagon detection
-isOctagon = false;
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% Approximate the largest boundary with fewer points (polygon)
-approxBoundary = B_max(1:round(end/8):end, :); % Approximate to 8 points
+function [bool] = DetectInvertedTriangle(img)
+    % DetectInvertedTriangle detects an inverted triangular shape in an input image.
+    % Inputs:
+    %   - img: RGB input image
+    % Outputs:
+    %   - bool: Logical value indicating whether an inverted triangle was detected
 
-% Check if the number of points in the boundary is 8 (octagon)
-if length(approxBoundary) == 8
-    isOctagon = true;
-end
-pause(1)
-% Plot the boundary
-figure;
-imshow(img);
-hold on;
-plot(B_max(:,2), B_max(:,1), 'r', 'LineWidth', 2); % Plot original boundary in red
-plot(approxBoundary(:,2), approxBoundary(:,1), 'g', 'LineWidth', 2); % Plot approximated boundary in green
-title('Detected Octagon (Stop Sign)');
+    % Convert the image to grayscale and smooth it
+    grayImg = rgb2gray(img);
+    grayImg = imgaussfilt(grayImg, 2); 
 
-% Display result
-if isOctagon
-    disp('Detected an octagon (likely a stop sign)');
-    bool = true;
-else
-    disp('No octagon detected');
-    bool = false;
-end
+    % Binarize the image adaptively
+    binImg = imbinarize(grayImg);
+
+    % Morphological operations to enhance binary image
+    % Dilate and complement to close gaps
+    se = strel('disk', 1); 
+    binImg = imdilate(binImg, se);
+
+    % Remove objects connected to the image border
+    binImg = imclearborder(binImg);
+
+    % Fill holes to ensure the shape is solid
+    binImg = imfill(binImg, 'holes');
+
+    % Edge detection using Canny method
+    edges = edge(binImg, 'Canny');
+
+    % Close gaps in edges using morphological operations
+    se = strel('disk', 5);
+    edges = imdilate(edges, se);
+    edges = imerode(edges, se);
+
+    % Find boundaries of connected components
+    [boundaries, ~] = bwboundaries(edges, 'noholes');
+
+    % Identify the largest boundary
+    largestBoundary = [];
+    maxBoundarySize = 0;
+    for i = 1:length(boundaries)
+        currentBoundary = boundaries{i};
+        if size(currentBoundary, 1) > maxBoundarySize
+            largestBoundary = currentBoundary;
+            maxBoundarySize = size(currentBoundary, 1);
+        end
+    end
+
+    % Approximate boundary to a polygon
+    % Use Douglas-Peucker algorithm to reduce boundary points
+    tolerance = 0.02; % Initial tolerance for approximation
+    approxBoundary = reducepoly(largestBoundary, tolerance);
+
+    % Handle cases where the approximated boundary has fewer/more than 3 sides
+    if size(approxBoundary, 1) ~= 3
+        if size(approxBoundary, 1) < 3
+            tolerance = tolerance / 2;
+        else
+            tolerance = tolerance * 1.5;
+        end
+        approxBoundary = reducepoly(largestBoundary, tolerance);
+    end
+
+    % Check if the approximated boundary is a triangle
+    isTriangle = (size(approxBoundary, 1) < 5) && (size(approxBoundary, 1) >= 3);
+
+    % Plot results
+    figure;
+    imshow(img);
+    hold on;
+    plot(largestBoundary(:, 2), largestBoundary(:, 1), 'r', 'LineWidth', 2); % Original boundary
+    plot(approxBoundary(:, 2), approxBoundary(:, 1), 'g', 'LineWidth', 2); % Approximated refined boundary
+     title('Detected Inverted Triangle (Yield Sign)');
+
+     % Check if the triangle is inverted
+    centroid = mean(approxBoundary, 1); % Calculate centroid of the boundary
+    verticesY = approxBoundary(:, 1); % Extract y-coordinates of the vertices
+    isInverted = sum(verticesY > centroid(1)) < sum(verticesY < centroid(1)); % Check if most vertices are below the centroid
+
+    % Output result
+    if isTriangle && isInverted
+        disp('Detected an inverted triangle (likely a yield sign)');
+        bool = true;
+    else
+        disp('No inverted triangle detected');
+        bool = false;
+    end
 
 end
