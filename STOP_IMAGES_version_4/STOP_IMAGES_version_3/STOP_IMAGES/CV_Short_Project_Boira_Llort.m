@@ -12,7 +12,7 @@ close all; clear;clc;
 % original = imread('6B16XQW53PXG.jpg');
 % original = imread('AEKG21HVX56P.jpg');
 % original = imread('7FK4JZSLTYT7.jpg');
-original = imread('AdobeStock_20230649_Preview.jpeg');
+% original = imread('AdobeStock_20230649_Preview.jpeg');
 
 imshow(original)
 DetectSTOPSign(original);
