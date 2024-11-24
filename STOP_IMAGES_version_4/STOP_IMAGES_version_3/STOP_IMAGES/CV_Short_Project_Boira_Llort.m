@@ -9,24 +9,58 @@ close all; clear;clc;
 % Load Input Image
 % original = imread('9DY03ZX61ZJS.jpg');
 % original = imread('47M6AENC4X76.jpg');
-original = imread('6B16XQW53PXG.jpg');
+% original = imread('6B16XQW53PXG.jpg');
 % original = imread('AEKG21HVX56P.jpg');
 % original = imread('7FK4JZSLTYT7.jpg');
+original = imread('AdobeStock_20230649_Preview.jpeg');
+
 imshow(original)
+DetectSTOPSign(original);
+DetectCEDASign(original);
 
-% Detect red areas
-[mask Images] = DetectRedArea(original);
-
-% Show detected ares
-cut_image = Images.Image;
-imshow(cut_image);
-
-% Detect if octagon is present
-[bool1] = DetectOctagon(cut_image);
-[bool2] = DetectSTOPWordFromImages(Images(1));
-% Detect STOP words
 
 %% Functions used
+
+function [bool] = DetectCEDASign(original)
+    % Detect red areas
+    [mask Images] = DetectRedArea(original);
+
+    % Show detected ares
+    cut_image = Images.Image;
+    imshow(cut_image);
+
+    % Detect if octagon is present
+    [bool1] = DetectInvertedTriangle(cut_image);
+
+    bool = bool1;
+
+    if(bool)
+        disp('There is a CEDA sign in the image')
+    else
+        disp('No CEDA sign present')
+    end
+end
+
+function [bool] = DetectSTOPSign(original)
+    % Detect red areas
+    [mask Images] = DetectRedArea(original);
+
+    % Show detected ares
+    cut_image = Images.Image;
+    imshow(cut_image);
+
+    % Detect if octagon is present
+    [bool1] = DetectOctagon(cut_image);
+    [bool2] = DetectSTOPWordFromImages(Images(1));
+
+    bool = bool1 && bool2;
+
+    if(bool)
+        disp('There is a stop sign in the image')
+    else
+        disp('No stop sign present')
+    end
+end
 
 % Function to detect red areas of the image
 function [mask Images] = DetectRedArea(original)
