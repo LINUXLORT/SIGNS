@@ -25,13 +25,8 @@ DetectCEDASign(original);
 function [bool] = DetectCEDASign(original)
     % Detect red areas
     [mask Images] = DetectRedArea(original);
-
-    % Show detected ares
-    cut_image = Images.Image;
-    imshow(cut_image);
-
-    % Detect if octagon is present
-    [bool1] = DetectInvertedTriangle(cut_image);
+    % Detect if Triangle is present
+    [bool1] = DetectInvertedTriangle(Images);
 
     bool = bool1;
 
@@ -45,9 +40,9 @@ end
 function [bool] = DetectSTOPSign(original)
     % Detect red areas
     [mask Images] = DetectRedArea(original); % 1 o me simatges
-
     % Detect if octagon is present
-    [bool1] = DetectOctagon(Images.Image);
+    [bool1] = DetectOctagon(Images);
+    % Detect if STOP letters are present
     [bool2] = DetectSTOPWordFromImages(Images);
 
     bool = bool1 && bool2;
@@ -171,7 +166,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Function to detect the word STOP
 function [bool info_region] = DetectSTOPWordFromImages(Images)
-    num_images = size(Images)
+    num_images = size(Images);
     global_count = 0;
     for i=1:num_images(2)
         Image = Images(i);
@@ -345,7 +340,7 @@ function [bool] = DetectLettersSTOP(region_props_letter, main_area)
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [bool] = DetectOctagon(img)
+function [bool] = DetectOctagon(Images)
     % DetectOctagon detects an octagonal shape in an input image.
     % Inputs:
     %   - img: RGB input image
@@ -353,182 +348,206 @@ function [bool] = DetectOctagon(img)
     %   - bool: Logical value indicating whether an octagon was detected
 
     % Convert the image to grayscale and smooth it
-    grayImg = rgb2gray(img);
-    grayImg = imgaussfilt(grayImg, 2); % Gaussian filter to reduce noise
-
-    % Binarize the image adaptively
-    binImg = imbinarize(grayImg);
-
-    % Morphological operations to enhance binary image
-    se = strel('disk', 1); 
-    binImg = imdilate(binImg, se);
-    binImg = imcomplement(binImg);
-
-    % Remove objects connected to the image border
-    binImg = imclearborder(binImg);
-
-    % Edge detection using Canny method
-    edges = edge(binImg, 'Canny');
-
-    % Close gaps in edges using morphological operations
-    se = strel('disk', 5);
-    edges = imdilate(edges, se);
-    edges = imerode(edges, se);
-
-    % Find boundaries of connected components
-    [boundaries, ~] = bwboundaries(edges, 'noholes');
-
-    % Check if boundaries are found
-    if isempty(boundaries)
-        disp('No Octagon detected.');
-        bool = false;
-        return;
-    end
-
-    % Identify the largest boundary
-    largestBoundary = [];
-    maxBoundarySize = 0;
-    for i = 1:length(boundaries)
-        currentBoundary = boundaries{i};
-        if size(currentBoundary, 1) > maxBoundarySize
-            largestBoundary = currentBoundary;
-            maxBoundarySize = size(currentBoundary, 1);
+    num_images = size(Images);
+    global_count = 0;
+    for i=1:num_images(2)
+        img = Images(i).Image;
+        grayImg = rgb2gray(img);
+        grayImg = imgaussfilt(grayImg, 2); % Gaussian filter to reduce noise
+    
+        % Binarize the image adaptively
+        binImg = imbinarize(grayImg);
+    
+        % Morphological operations to enhance binary image
+        se = strel('disk', 1); 
+        binImg = imdilate(binImg, se);
+        binImg = imcomplement(binImg);
+    
+        % Remove objects connected to the image border
+        binImg = imclearborder(binImg);
+    
+        % Edge detection using Canny method
+        edges = edge(binImg, 'Canny');
+    
+        % Close gaps in edges using morphological operations
+        se = strel('disk', 5);
+        edges = imdilate(edges, se);
+        edges = imerode(edges, se);
+    
+        % Find boundaries of connected components
+        [boundaries, ~] = bwboundaries(edges, 'noholes');
+    
+        % Check if boundaries are found
+        if isempty(boundaries)
+            disp('No Octagon detected.');
+            bool = false;
+            return;
         end
-    end
-
-    % If no valid boundary is found, exit
-    if isempty(largestBoundary)
-        disp('No Octagon detected.');
-        bool = false;
-        return;
-    end
-
-    % Approximate boundary to a polygon
-    % Use Douglas-Peucker algorithm to reduce boundary points
-    tolerance = 0.02; % Initial tolerance for approximation
-    approxBoundary = reducepoly(largestBoundary, tolerance);
-
-    % Adjust the tolerance if the approximation does not have ~8 sides
-    if size(approxBoundary, 1) ~= 8
-        if size(approxBoundary, 1) < 8
-            tolerance = tolerance / 2;
-        else
-            tolerance = tolerance * 1.5;
+    
+        % Identify the largest boundary
+        largestBoundary = [];
+        maxBoundarySize = 0;
+        for i = 1:length(boundaries)
+            currentBoundary = boundaries{i};
+            if size(currentBoundary, 1) > maxBoundarySize
+                largestBoundary = currentBoundary;
+                maxBoundarySize = size(currentBoundary, 1);
+            end
         end
+    
+        % If no valid boundary is found, exit
+        if isempty(largestBoundary)
+            disp('No Octagon detected.');
+            bool = false;
+            return;
+        end
+    
+        % Approximate boundary to a polygon
+        % Use Douglas-Peucker algorithm to reduce boundary points
+        tolerance = 0.02; % Initial tolerance for approximation
         approxBoundary = reducepoly(largestBoundary, tolerance);
+    
+        % Adjust the tolerance if the approximation does not have ~8 sides
+        if size(approxBoundary, 1) ~= 8
+            if size(approxBoundary, 1) < 8
+                tolerance = tolerance / 2;
+            else
+                tolerance = tolerance * 1.5;
+            end
+            approxBoundary = reducepoly(largestBoundary, tolerance);
+        end
+    
+        % Check if the approximated boundary has approximately 8 sides
+        isOctagon = size(approxBoundary, 1) < 10 && size(approxBoundary, 1) > 6;
+    
+        % Plot results
+        figure;
+        imshow(img);
+        hold on;
+        if ~isempty(largestBoundary)
+            plot(largestBoundary(:, 2), largestBoundary(:, 1), 'r', 'LineWidth', 2); % Original boundary
+        end
+        if ~isempty(approxBoundary)
+            plot([approxBoundary(:, 2); approxBoundary(1, 2)], ...
+                 [approxBoundary(:, 1); approxBoundary(1, 1)], 'g', 'LineWidth', 2); % Approximated boundary
+        end
+        title('Detected Octagon (Stop Sign)');
+    
+        % Output result
+        if isOctagon
+            disp('Detected an octagon (likely a stop sign)');
+            global_count = global_count + 1;
+        else
+            disp('No octagon detected');
+        end
     end
 
-    % Check if the approximated boundary has approximately 8 sides
-    isOctagon = size(approxBoundary, 1) < 10 && size(approxBoundary, 1) > 6;
-
-    % Plot results
-    figure;
-    imshow(img);
-    hold on;
-    if ~isempty(largestBoundary)
-        plot(largestBoundary(:, 2), largestBoundary(:, 1), 'r', 'LineWidth', 2); % Original boundary
-    end
-    if ~isempty(approxBoundary)
-        plot([approxBoundary(:, 2); approxBoundary(1, 2)], ...
-             [approxBoundary(:, 1); approxBoundary(1, 1)], 'g', 'LineWidth', 2); % Approximated boundary
-    end
-    title('Detected Octagon (Stop Sign)');
-
-    % Output result
-    if isOctagon
-        disp('Detected an octagon (likely a stop sign)');
+    if(global_count >= 1)
+        disp('Detected Octagon')
         bool = true;
     else
-        disp('No octagon detected');
+        disp('Not detected Octagon')
         bool = false;
     end
 end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [bool] = DetectInvertedTriangle(img)
+function [bool] = DetectInvertedTriangle(Images)
     % DetectInvertedTriangle detects an inverted triangular shape in an input image.
     % Inputs:
     %   - img: RGB input image
     % Outputs:
     %   - bool: Logical value indicating whether an inverted triangle was detected
-
-    % Convert the image to grayscale and smooth it
-    grayImg = rgb2gray(img);
-    grayImg = imgaussfilt(grayImg, 2);
-
-    % Binarize the image adaptively
-    binImg = imbinarize(grayImg);
-
-    % Morphological operations to enhance binary image
-    se = strel('disk', 1);
-    binImg = imdilate(binImg, se);
-    binImg = imclearborder(binImg); % Remove border artifacts
-    binImg = imfill(binImg, 'holes'); % Fill holes in binary regions
-
-    % Label connected components in the binary image
-    labeledImg = bwlabel(binImg);
-
-    % Measure region properties using regionprops
-    stats = regionprops(labeledImg, 'Area', 'Perimeter', 'Eccentricity', ...
-                        'Solidity', 'Extent', 'Orientation', 'BoundingBox', ...
-                        'ConvexHull', 'Centroid');
-
-    % Initialize variables for triangle detection
-    isInvertedTriangle = false;
-
-    % Loop through each detected region
-    for i = 1:length(stats)
-        % Extract properties of the current region
-        area = stats(i).Area;
-        solidity = stats(i).Solidity;
-        extent = stats(i).Extent;
-        convexHull = stats(i).ConvexHull;
-        centroid = stats(i).Centroid;
-
-        % Approximate the convex hull boundary to reduce noise
-        approxBoundary = reducepoly(convexHull, 0.02);
-
-        % Check if the shape has at least 3 vertices
-        if size(approxBoundary, 1) >= 3
-            % Calculate aspect ratio and orientation
-            boundingBox = stats(i).BoundingBox;
-            width = boundingBox(3);
-            height = boundingBox(4);
-            aspectRatio = height / width;
-
-            % Check triangular characteristics:
-            % - High solidity (close to 1 indicates a filled shape)
-            % - Moderate extent (area compared to bounding box)
-            % - Reasonable aspect ratio for a triangle
-            if solidity > 0.8 && extent > 0.4 && extent < 0.65 && aspectRatio > 0.8 && aspectRatio < 1.5
-                % Check if the shape is inverted
-                verticesY = approxBoundary(:, 2); % Extract y-coordinates of vertices
-                isInverted = sum(verticesY > centroid(2)) < sum(verticesY < centroid(2));
-
-                % Confirm the inverted triangle shape
-                if isInverted
-                    isInvertedTriangle = true;
-
-                    % Visualize the detected triangle
-                    figure;
-                    imshow(img);
-                    hold on;
-                    plot([approxBoundary(:, 1); approxBoundary(1, 1)], ...
-                         [approxBoundary(:, 2); approxBoundary(1, 2)], 'g-', 'LineWidth', 2);
-                    title('Detected Inverted Triangle (Yield Sign)');
-                    break;
+    num_images = size(Images);
+    global_count = 0;
+    for i=1:num_images(2)
+        img = Images(i).Image;
+        % Convert the image to grayscale and smooth it
+        grayImg = rgb2gray(img);
+        grayImg = imgaussfilt(grayImg, 2);
+    
+        % Binarize the image adaptively
+        binImg = imbinarize(grayImg);
+    
+        % Morphological operations to enhance binary image
+        se = strel('disk', 1);
+        binImg = imdilate(binImg, se);
+        binImg = imclearborder(binImg); % Remove border artifacts
+        binImg = imfill(binImg, 'holes'); % Fill holes in binary regions
+    
+        % Label connected components in the binary image
+        labeledImg = bwlabel(binImg);
+    
+        % Measure region properties using regionprops
+        stats = regionprops(labeledImg, 'Area', 'Perimeter', 'Eccentricity', ...
+                            'Solidity', 'Extent', 'Orientation', 'BoundingBox', ...
+                            'ConvexHull', 'Centroid');
+    
+        % Initialize variables for triangle detection
+        isInvertedTriangle = false;
+    
+        % Loop through each detected region
+        for i = 1:length(stats)
+            % Extract properties of the current region
+            area = stats(i).Area;
+            solidity = stats(i).Solidity;
+            extent = stats(i).Extent;
+            convexHull = stats(i).ConvexHull;
+            centroid = stats(i).Centroid;
+    
+            % Approximate the convex hull boundary to reduce noise
+            approxBoundary = reducepoly(convexHull, 0.02);
+    
+            % Check if the shape has at least 3 vertices
+            if size(approxBoundary, 1) >= 3
+                % Calculate aspect ratio and orientation
+                boundingBox = stats(i).BoundingBox;
+                width = boundingBox(3);
+                height = boundingBox(4);
+                aspectRatio = height / width;
+    
+                % Check triangular characteristics:
+                % - High solidity (close to 1 indicates a filled shape)
+                % - Moderate extent (area compared to bounding box)
+                % - Reasonable aspect ratio for a triangle
+                if solidity > 0.8 && extent > 0.4 && extent < 0.65 && aspectRatio > 0.8 && aspectRatio < 1.5
+                    % Check if the shape is inverted
+                    verticesY = approxBoundary(:, 2); % Extract y-coordinates of vertices
+                    isInverted = sum(verticesY > centroid(2)) < sum(verticesY < centroid(2));
+    
+                    % Confirm the inverted triangle shape
+                    if isInverted
+                        isInvertedTriangle = true;
+    
+                        % Visualize the detected triangle
+                        figure;
+                        imshow(img);
+                        hold on;
+                        plot([approxBoundary(:, 1); approxBoundary(1, 1)], ...
+                             [approxBoundary(:, 2); approxBoundary(1, 2)], 'g-', 'LineWidth', 2);
+                        title('Detected Inverted Triangle (Yield Sign)');
+                        break;
+                    end
                 end
             end
         end
+    
+        % Output result
+        if isInvertedTriangle
+            disp('Detected an inverted triangle (likely a yield sign)');
+            global_count = global_count + 1;
+        else
+            disp('No inverted triangle detected');
+            
+        end
     end
 
-    % Output result
-    if isInvertedTriangle
-        disp('Detected an inverted triangle (likely a yield sign)');
+    if(global_count >= 1)
+        disp('Detected Octagon')
         bool = true;
     else
-        disp('No inverted triangle detected');
+        disp('Not detected Octagon')
         bool = false;
     end
 end
