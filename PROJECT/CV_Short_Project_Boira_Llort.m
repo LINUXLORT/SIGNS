@@ -8,14 +8,13 @@ close all; clear;clc;
 
 % Load Input Image
 % original = imread('9DY03ZX61ZJS.jpg');
-% original = imread('47M6AENC4X76.jpg');
-original = imread('6B16XQW53PXG.jpg');
+original = imread('47M6AENC4X76.jpg');
+% original = imread('6B16XQW53PXG.jpg');
 % original = imread('AEKG21HVX56P.jpg');
 % original = imread('multi.jpeg');
 % original = imread('7FK4JZSLTYT7.jpg');
 % original = imread('AdobeStock_20230649_Preview.jpeg');
 
-imshow(original)
 DetectSTOPSign(original);
 DetectCEDASign(original);
 
@@ -39,15 +38,31 @@ end
 
 function [bool] = DetectSTOPSign(original)
     % Detect red areas
-    [mask Images] = DetectRedArea(original); % 1 o me simatges
+    [~, Images] = DetectRedArea(original); % 1 o me simatges
     % Detect if octagon is present
-    [bool1] = DetectOctagon(Images);
+    [index_detected_octagon] = DetectOctagon(Images);
     % Detect if STOP letters are present
-    [bool2] = DetectSTOPWordFromImages(Images);
+    [index_detected_stop] = DetectSTOPWordFromImages(Images);
 
-    bool = bool1 && bool2;
+    merged_detection = index_detected_stop | index_detected_octagon;
 
-    if(bool)
+    if(any(merged_detection))
+        num = size(merged_detection);
+        figure 
+        imshow(original)
+        pause(1)
+        hold on
+        for p = 1:num(2)
+            if(merged_detection(p) == true)
+                %Plot centroid and bouding box
+                x = Images(p).Info(1);
+                y = Images(p).Info(2);
+                bb = Images(p).Info(3:6);
+                plot(x,y,'k*')
+                rectangle('Position',bb,'EdgeColor','b','LineWidth',3);
+            end
+        end
+        hold off
         disp('There is a stop sign in the image')
     else
         disp('No stop sign present')
@@ -66,12 +81,6 @@ function [mask Images] = DetectRedArea(original)
     %Adjust the image to enhance redish 
     equalized = imadjust(filtered,[.2 .1 0;.4 .7 1],[]);
     
-    % % Display the original images
-    % subplot(2,1,1);
-    % imshow(original);
-    % subplot(2,1,2)
-    % imshow(equalized)
-    
     % Thrshold for read area
     selectedth = [170 255; 0 100; 0 100];
     
@@ -80,23 +89,15 @@ function [mask Images] = DetectRedArea(original)
                     (equalized(:,:,2) >= selectedth(2,1)) & (equalized(:,:,2) <= selectedth(2,2)) & ...
                     (equalized(:,:,3) >= selectedth(3,1)) & (equalized(:,:,3) <= selectedth(3,2));
     
-    % clean up selection to get rid of cross-selection in shadow areas
-    % selectedmask_raw = bwareaopen(selectedmask_raw,100);
-    
     % morphologicat processing
     kernel = strel('disk',1);
     full_mask = imopen(selectedmask_raw,kernel);
-    
-    % Plot original Image
-    % figure
-    % imshow(original)
-
+   
     % Get regionprops
     Ilabel = bwlabel(full_mask);
     stats_stop = regionprops(Ilabel,'centroid','Area','BoundingBox');
     count = 1;
 
-    hold on;
     for i=1:numel(stats_stop)
         % Determine if this has to be selected and threshold of selection
         area_threshold = 0.3*max(vertcat(stats_stop.Area));
@@ -113,21 +114,11 @@ function [mask Images] = DetectRedArea(original)
             area_to_struct = stats_stop(i).Area;
 
             %Plot centroid and bouding box
-            plot(x,y,'k*')
-            R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3);
+            % plot(x,y,'k*')
+            R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3,'Visible','off');
 
             %Save image info to info_array
             info_array = [x y bb area_to_struct];
-            % 
-            % % Obtain the regions to crop the detected area
-            % x_region = ceil(R.Position(1)):ceil(R.Position(1)+R.Position(3));
-            % y_region = ceil(R.Position(2)):ceil(R.Position(2)+R.Position(4));
-            % 
-            % % Obtain cropped image
-            % Cropped = original(y_region,x_region,:);
-            % Cropped_mask = full_mask(y_region,x_region,:);
-            % Define tolerance (positive values will expand the region, negative values will shrink it)
-
             tolerance = 10; % Adjust this value based on the desired tolerance (in pixels)
             
             % Obtain the regions to crop the detected area
@@ -152,24 +143,17 @@ function [mask Images] = DetectRedArea(original)
             % Continue counting
             count = count + 1;
         end
-        % text(x-20, y+10, ['R = ' num2str(R)], 'Color', 'g', 'FontSize', 8);
-        % text(x-20, y+20, ['C = ' num2str(C)], 'Color', 'g', 'FontSize', 8);
     end
-    hold off;
 
-    % % Plot the mask were stop sign should appear
-    % figure 
-    % imshow(full_mask)
     mask = full_mask;
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Function to detect the word STOP
-function [bool info_region] = DetectSTOPWordFromImages(Images)
+function [index_detected] = DetectSTOPWordFromImages(Images)
     num_images = size(Images);
-    global_count = 0;
-    for i=1:num_images(2)
-        Image = Images(i);
+    for j=1:num_images(2)
+        Image = Images(j);
         area_of_image = Image.Info(7); %Index 7 is the area
         Image = Image.Image;
         %Filter the original image a 
@@ -195,17 +179,11 @@ function [bool info_region] = DetectSTOPWordFromImages(Images)
     
         if(counter == 4 || counter == 3)
             disp('Stop Sign detected Form letters');
-            global_count = global_count +1;
+            index_detected(j) = true;
         else
             disp('Stop Sign not detected Form letters');
+            index_detected(j) = false;
         end
-    end
-    if(global_count >= 1)
-        disp('Stops detected')
-        bool = true;
-    else
-        disp('Stops not detected')
-        bool = false;
     end
 end
 
@@ -340,7 +318,7 @@ function [bool] = DetectLettersSTOP(region_props_letter, main_area)
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [bool] = DetectOctagon(Images)
+function [index_array] = DetectOctagon(Images)
     % DetectOctagon detects an octagonal shape in an input image.
     % Inputs:
     %   - img: RGB input image
@@ -349,9 +327,8 @@ function [bool] = DetectOctagon(Images)
 
     % Convert the image to grayscale and smooth it
     num_images = size(Images);
-    global_count = 0;
-    for i=1:num_images(2)
-        img = Images(i).Image;
+    for j=1:num_images(2)
+        img = Images(j).Image;
         grayImg = rgb2gray(img);
         grayImg = imgaussfilt(grayImg, 2); % Gaussian filter to reduce noise
     
@@ -423,6 +400,7 @@ function [bool] = DetectOctagon(Images)
         % Plot results
         figure;
         imshow(img);
+        pause(1)
         hold on;
         if ~isempty(largestBoundary)
             plot(largestBoundary(:, 2), largestBoundary(:, 1), 'r', 'LineWidth', 2); % Original boundary
@@ -436,18 +414,11 @@ function [bool] = DetectOctagon(Images)
         % Output result
         if isOctagon
             disp('Detected an octagon (likely a stop sign)');
-            global_count = global_count + 1;
+            index_array(j) = true;
         else
             disp('No octagon detected');
+            index_array(j) = false;
         end
-    end
-
-    if(global_count >= 1)
-        disp('Detected Octagon')
-        bool = true;
-    else
-        disp('Not detected Octagon')
-        bool = false;
     end
 end
 
@@ -461,8 +432,8 @@ function [bool] = DetectInvertedTriangle(Images)
     %   - bool: Logical value indicating whether an inverted triangle was detected
     num_images = size(Images);
     global_count = 0;
-    for i=1:num_images(2)
-        img = Images(i).Image;
+    for j=1:num_images(2)
+        img = Images(j).Image;
         % Convert the image to grayscale and smooth it
         grayImg = rgb2gray(img);
         grayImg = imgaussfilt(grayImg, 2);
