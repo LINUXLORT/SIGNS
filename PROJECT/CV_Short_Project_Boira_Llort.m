@@ -8,12 +8,12 @@ close all; clear;clc;
 
 % Load Input Image
 % original = imread('9DY03ZX61ZJS.jpg');
-original = imread('47M6AENC4X76.jpg');
+% original = imread('47M6AENC4X76.jpg');
 % original = imread('6B16XQW53PXG.jpg');
 % original = imread('AEKG21HVX56P.jpg');
 % original = imread('multi.jpeg');
 % original = imread('7FK4JZSLTYT7.jpg');
-% original = imread('AdobeStock_20230649_Preview.jpeg');
+original = imread('AdobeStock_20230649_Preview.jpeg');
 
 DetectSTOPSign(original);
 DetectCEDASign(original);
@@ -23,13 +23,27 @@ DetectCEDASign(original);
 
 function [bool] = DetectCEDASign(original)
     % Detect red areas
-    [mask Images] = DetectRedArea(original);
+    [~, Images] = DetectRedArea(original);
     % Detect if Triangle is present
-    [bool1] = DetectInvertedTriangle(Images);
+    [array_detected] = DetectInvertedTriangle(Images);
 
-    bool = bool1;
-
-    if(bool)
+    if(any(array_detected))
+        num = size(array_detected);
+        figure
+        imshow(original)
+        pause(1)
+        hold on
+        for p = 1:num(2)
+            if(array_detected(p) == true)
+                %Plot centroid and bouding box
+                x = Images(p).Info(1);
+                y = Images(p).Info(2);
+                bb = Images(p).Info(3:6);
+                plot(x,y,'k*')
+                rectangle('Position',bb,'EdgeColor','b','LineWidth',3);
+            end   
+        end
+        hold off
         disp('There is a CEDA sign in the image')
     else
         disp('No CEDA sign present')
@@ -357,7 +371,7 @@ function [index_array] = DetectOctagon(Images)
         % Check if boundaries are found
         if isempty(boundaries)
             disp('No Octagon detected.');
-            bool = false;
+            index_array(j) = false;
             return;
         end
     
@@ -375,7 +389,7 @@ function [index_array] = DetectOctagon(Images)
         % If no valid boundary is found, exit
         if isempty(largestBoundary)
             disp('No Octagon detected.');
-            bool = false;
+            index_array(j) = false;
             return;
         end
     
@@ -424,14 +438,13 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [bool] = DetectInvertedTriangle(Images)
+function [array_detected] = DetectInvertedTriangle(Images)
     % DetectInvertedTriangle detects an inverted triangular shape in an input image.
     % Inputs:
     %   - img: RGB input image
     % Outputs:
     %   - bool: Logical value indicating whether an inverted triangle was detected
     num_images = size(Images);
-    global_count = 0;
     for j=1:num_images(2)
         img = Images(j).Image;
         % Convert the image to grayscale and smooth it
@@ -494,10 +507,12 @@ function [bool] = DetectInvertedTriangle(Images)
                         % Visualize the detected triangle
                         figure;
                         imshow(img);
+                        pause(1)
                         hold on;
                         plot([approxBoundary(:, 1); approxBoundary(1, 1)], ...
                              [approxBoundary(:, 2); approxBoundary(1, 2)], 'g-', 'LineWidth', 2);
                         title('Detected Inverted Triangle (Yield Sign)');
+                        hold off
                         break;
                     end
                 end
@@ -507,18 +522,10 @@ function [bool] = DetectInvertedTriangle(Images)
         % Output result
         if isInvertedTriangle
             disp('Detected an inverted triangle (likely a yield sign)');
-            global_count = global_count + 1;
+            array_detected(j) = true;
         else
             disp('No inverted triangle detected');
-            
+            array_detected(j) = false;
         end
-    end
-
-    if(global_count >= 1)
-        disp('Detected Octagon')
-        bool = true;
-    else
-        disp('Not detected Octagon')
-        bool = false;
     end
 end
