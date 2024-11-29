@@ -9,11 +9,12 @@ close all; clear;clc;
 % Load Input Image
 % original = imread('9DY03ZX61ZJS.jpg');
 % original = imread('47M6AENC4X76.jpg');
-% original = imread('6B16XQW53PXG.jpg');
+original = imread('6B16XQW53PXG.jpg');
+% original = imread('AdobeStock_517420_Preview.jpeg');
 % original = imread('AEKG21HVX56P.jpg');
 % original = imread('multi.jpeg');
 % original = imread('7FK4JZSLTYT7.jpg');
-original = imread('AdobeStock_20230649_Preview.jpeg');
+% original = imread('AdobeStock_20230649_Preview.jpeg');
 
 DetectSTOPSign(original);
 DetectCEDASign(original);
@@ -83,55 +84,79 @@ function [bool] = DetectSTOPSign(original)
     end
 end
 
-% Function to detect red areas of the image
-function [mask Images] = DetectRedArea(original)
+function [mask, Images] = DetectRedArea(original)
+    % DetectRedArea detects the red areas of a stop sign in an image.
+    % Inputs:
+    %   - original: RGB input image
+    % Outputs:
+    %   - mask: Logical mask for the detected red areas
+    %   - Images: Struct array containing cropped images of detected regions
 
-    % Pad image to avoind conflicts with index when ceilling
-    original = padarray(original,[1 1],1,'both');
+    % Pad image to avoid conflicts with index when cropping
+    original = padarray(original, [1 1], 1, 'both');
 
-    %Filter the original image a little
-    filtered = imgaussfilt(original,1);
-    
-    %Adjust the image to enhance redish 
-    equalized = imadjust(filtered,[.2 .1 0;.4 .7 1],[]);
-    
-    % Thrshold for read area
-    selectedth = [170 255; 0 100; 0 100];
-    
-    % make the selection as a closed box
-    selectedmask_raw = (equalized(:,:,1) >= selectedth(1,1)) & (equalized(:,:,1) <= selectedth(1,2)) & ...
-                    (equalized(:,:,2) >= selectedth(2,1)) & (equalized(:,:,2) <= selectedth(2,2)) & ...
-                    (equalized(:,:,3) >= selectedth(3,1)) & (equalized(:,:,3) <= selectedth(3,2));
-    
-    % morphologicat processing
-    kernel = strel('disk',1);
-    full_mask = imopen(selectedmask_raw,kernel);
-   
-    % Get regionprops
+    % Smooth the image slightly to reduce noise
+    filtered = imgaussfilt(original, 1);
+
+    % Convert the image to HSV color space
+    hsvImage = rgb2hsv(filtered);
+
+    % Define thresholds for red in HSV (more specific range)
+    % Red has two ranges in Hue: 0-10 and 160-180 (on a scale of 0-180 in MATLAB)
+    lowerRed1 = [0, 0.6, 0.3]; % Increased saturation and value thresholds
+    upperRed1 = [10/360, 1, 1]; % Scale Hue to 0-1 for im2double
+    lowerRed2 = [160/360, 0.6, 0.3];
+    upperRed2 = [1, 1, 1];
+
+    % Create masks for both red ranges
+    mask1 = (hsvImage(:,:,1) >= lowerRed1(1)) & (hsvImage(:,:,1) <= upperRed1(1)) & ...
+            (hsvImage(:,:,2) >= lowerRed1(2)) & (hsvImage(:,:,3) >= lowerRed1(3));
+
+    mask2 = (hsvImage(:,:,1) >= lowerRed2(1)) & (hsvImage(:,:,1) <= upperRed2(1)) & ...
+            (hsvImage(:,:,2) >= lowerRed2(2)) & (hsvImage(:,:,3) >= lowerRed2(3));
+
+    % Combine both masks
+    selectedmask_raw = mask1 | mask2;
+
+    % Morphological processing to combine detected regions (close gaps between regions)
+    se = strel('disk', 10); % Larger disk to merge the red regions better
+    full_mask = imdilate(selectedmask_raw, se);
+
+    % Remove small noise areas (based on area size)
+    full_mask = bwareaopen(full_mask, 500); % Remove regions smaller than 500 pixels
+
+    % Further morphological cleaning (optional)
+    % You can try erode to remove extra regions or use 'imfill' if there are holes
+    full_mask = imfill(full_mask, 'holes');
+    full_mask = imerode(full_mask, se);  % Erosion can help to reduce small regions
+
+    % Label connected components
     Ilabel = bwlabel(full_mask);
-    stats_stop = regionprops(Ilabel,'centroid','Area','BoundingBox');
+    stats_stop = regionprops(Ilabel, 'centroid', 'Area', 'BoundingBox');
     count = 1;
 
-    for i=1:numel(stats_stop)
-        % Determine if this has to be selected and threshold of selection
-        area_threshold = 0.3*max(vertcat(stats_stop.Area));
+    % Initialize output structure
+    Images = struct('Image', {}, 'Info', {}, 'mask', {});
+
+    % Loop through detected regions
+    for i = 1:numel(stats_stop)
+        % Define area thresholds for selection
+        area_threshold = 0.3 * max(vertcat(stats_stop.Area));
         max_threshold = 400000;
-        if(stats_stop(i).Area >= area_threshold && stats_stop(i).Area <= max_threshold)
-            
-            %Obtain centroids
-            centroid=stats_stop(i).Centroid;
-            x=centroid(1);
-            y=centroid(2);
-            
-            %Obtain bouding box
+
+        if (stats_stop(i).Area >= area_threshold && stats_stop(i).Area <= max_threshold)
+            % Obtain centroids and bounding box
+            centroid = stats_stop(i).Centroid;
+            x = centroid(1);
+            y = centroid(2);
             bb = stats_stop(i).BoundingBox;
             area_to_struct = stats_stop(i).Area;
 
             %Plot centroid and bouding box
-            % plot(x,y,'k*')
+            f1 = figure(100);
             R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3,'Visible','off');
 
-            %Save image info to info_array
+            % Save image info to structure
             info_array = [x y bb area_to_struct];
             tolerance = 10; % Adjust this value based on the desired tolerance (in pixels)
             
@@ -140,27 +165,31 @@ function [mask Images] = DetectRedArea(original)
             x_end = ceil(R.Position(1) + R.Position(3));
             y_start = ceil(R.Position(2));
             y_end = ceil(R.Position(2) + R.Position(4));
-            
-            % Apply tolerance to the cropping region
-            x_start = max(1, x_start - tolerance);  % Ensure x_start does not go below 1
-            x_end = min(size(original, 2), x_end + tolerance);  % Ensure x_end does not go beyond image width
-            y_start = max(1, y_start - tolerance);  % Ensure y_start does not go below 1
-            y_end = min(size(original, 1), y_end + tolerance);  % Ensure y_end does not go beyond image height
-            
-            % Obtain cropped image with tolerance applied
+            close(f1)
+
+            % Apply tolerance
+            x_start = max(1, x_start - tolerance);
+            x_end = min(size(original, 2), x_end + tolerance);
+            y_start = max(1, y_start - tolerance);
+            y_end = min(size(original, 1), y_end + tolerance);
+
+            % Crop the region
             Cropped = original(y_start:y_end, x_start:x_end, :);
             Cropped_mask = full_mask(y_start:y_end, x_start:x_end, :);
 
-            % Generate array of structs. Each array has an image and info
-            Images(count) = struct('Image',Cropped,'Info',info_array, 'mask',Cropped_mask);
-    
-            % Continue counting
+            % Store the results in the struct array
+            Images(count).Image = Cropped;
+            Images(count).Info = info_array;
+            Images(count).mask = Cropped_mask;
+
+            % Increment counter
             count = count + 1;
         end
     end
-
     mask = full_mask;
 end
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Function to detect the word STOP
@@ -411,24 +440,24 @@ function [index_array] = DetectOctagon(Images)
         % Check if the approximated boundary has approximately 8 sides
         isOctagon = size(approxBoundary, 1) < 10 && size(approxBoundary, 1) > 6;
     
-        % Plot results
-        figure;
-        imshow(img);
-        pause(1)
-        hold on;
-        if ~isempty(largestBoundary)
-            plot(largestBoundary(:, 2), largestBoundary(:, 1), 'r', 'LineWidth', 2); % Original boundary
-        end
-        if ~isempty(approxBoundary)
-            plot([approxBoundary(:, 2); approxBoundary(1, 2)], ...
-                 [approxBoundary(:, 1); approxBoundary(1, 1)], 'g', 'LineWidth', 2); % Approximated boundary
-        end
-        title('Detected Octagon (Stop Sign)');
-    
         % Output result
         if isOctagon
             disp('Detected an octagon (likely a stop sign)');
             index_array(j) = true;
+    
+            % Plot results
+            figure;
+            imshow(img);
+            pause(1)
+            hold on;
+            if ~isempty(largestBoundary)
+                plot(largestBoundary(:, 2), largestBoundary(:, 1), 'r', 'LineWidth', 2); % Original boundary
+            end
+            if ~isempty(approxBoundary)
+                plot([approxBoundary(:, 2); approxBoundary(1, 2)], ...
+                     [approxBoundary(:, 1); approxBoundary(1, 1)], 'g', 'LineWidth', 2); % Approximated boundary
+            end
+            title('Detected Octagon (Stop Sign)');
         else
             disp('No octagon detected');
             index_array(j) = false;
