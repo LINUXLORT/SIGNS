@@ -6,19 +6,34 @@
 % Clear
 close all; clear;clc;
 
-% Load Input Image
-% original = imread('9DY03ZX61ZJS.jpg');
-% original = imread('47M6AENC4X76.jpg');
-original = imread('6B16XQW53PXG.jpg');
-% original = imread('AdobeStock_517420_Preview.jpeg');
-% original = imread('AEKG21HVX56P.jpg');
-% original = imread('multi.jpeg');
-% original = imread('7FK4JZSLTYT7.jpg');
-% original = imread('AdobeStock_20230649_Preview.jpeg');
+% Read Table
+rmdir('TEST','s');
+T = readtable("Analisys.xlsx");
+size_table = size(T);
+num_images = size_table(1)-1; %Title
+mkdir('TEST')
 
-DetectSTOPSign(original);
-DetectCEDASign(original);
+for i=2:num_images
+    image = char(T(i,1).NOM);
+    full_name = "IMATGES_INPUT/"+image;
+    original = imread(full_name);
+    
+    DetectSTOPSign(original);
+    DetectCEDASign(original);
 
+    fighandle = findall(0,'Type','Figure')
+    if length(fighandle) == 0
+    else
+        string = "TEST/"+image;
+        mkdir(string);
+        for iFig = 1:length(fighandle)
+            string = string+"/";
+            saveas(fighandle(iFig),string)
+        end
+    end
+
+    close all;
+end
 
 %% Functions used
 
@@ -195,6 +210,10 @@ end
 % Function to detect the word STOP
 function [index_detected] = DetectSTOPWordFromImages(Images)
     num_images = size(Images);
+    if num_images < 1
+        index_detected = false;
+        return;
+    end
     for j=1:num_images(2)
         Image = Images(j);
         area_of_image = Image.Info(7); %Index 7 is the area
@@ -370,6 +389,10 @@ function [index_array] = DetectOctagon(Images)
 
     % Convert the image to grayscale and smooth it
     num_images = size(Images);
+    if num_images < 1
+        index_array = false;
+        return 
+    end
     for j=1:num_images(2)
         img = Images(j).Image;
         grayImg = rgb2gray(img);
@@ -474,6 +497,10 @@ function [array_detected] = DetectInvertedTriangle(Images)
     % Outputs:
     %   - bool: Logical value indicating whether an inverted triangle was detected
     num_images = size(Images);
+    if num_images < 1
+        array_detected = false
+        return
+    end
     for j=1:num_images(2)
         img = Images(j).Image;
         % Convert the image to grayscale and smooth it
