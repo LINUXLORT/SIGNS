@@ -7,7 +7,9 @@
 close all; clear;clc;
 
 % Read Table
-rmdir('TEST','s');
+try
+    rmdir('TEST','s');
+end
 T = readtable("Analisys.xlsx");
 size_table = size(T);
 num_images = size_table(1)-1; %Title
@@ -18,26 +20,30 @@ for i=2:num_images
     full_name = "IMATGES_INPUT/"+image;
     original = imread(full_name);
     
-    DetectSTOPSign(original);
-    DetectCEDASign(original);
-
+    [num_stop] = DetectSTOPSign(original);
+    [num_ceda] = DetectCEDASign(original);
+    
+    T(i,4) = num2cell(num_stop);
+    T(i,5) = num2cell(num_ceda);
     fighandle = findall(0,'Type','Figure')
     if length(fighandle) == 0
     else
         string = "TEST/"+image;
         mkdir(string);
         for iFig = 1:length(fighandle)
-            string = string+"/";
-            saveas(fighandle(iFig),string)
+            name = string+"/"+iFig;
+            saveas(fighandle(iFig),name)
         end
     end
-
+    
+    writetable(T,"Output.xlsx")
     close all;
 end
 
 %% Functions used
 
-function [bool] = DetectCEDASign(original)
+function [number] = DetectCEDASign(original)
+    number = 0
     % Detect red areas
     [~, Images] = DetectRedArea(original);
     % Detect if Triangle is present
@@ -51,6 +57,7 @@ function [bool] = DetectCEDASign(original)
         hold on
         for p = 1:num(2)
             if(array_detected(p) == true)
+                number = number + 1;
                 %Plot centroid and bouding box
                 x = Images(p).Info(1);
                 y = Images(p).Info(2);
@@ -66,7 +73,8 @@ function [bool] = DetectCEDASign(original)
     end
 end
 
-function [bool] = DetectSTOPSign(original)
+function [number] = DetectSTOPSign(original)
+    number = 0;
     % Detect red areas
     [~, Images] = DetectRedArea(original); % 1 o me simatges
     % Detect if octagon is present
@@ -84,6 +92,7 @@ function [bool] = DetectSTOPSign(original)
         hold on
         for p = 1:num(2)
             if(merged_detection(p) == true)
+                number = number + 1;
                 %Plot centroid and bouding box
                 x = Images(p).Info(1);
                 y = Images(p).Info(2);
@@ -94,8 +103,10 @@ function [bool] = DetectSTOPSign(original)
         end
         hold off
         disp('There is a stop sign in the image')
+        bool = true;
     else
         disp('No stop sign present')
+        bool = false;
     end
 end
 
