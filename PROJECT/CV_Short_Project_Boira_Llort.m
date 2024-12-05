@@ -6,19 +6,19 @@
 % Clear
 close all; clear;clc;
 
-FOLDER = "TEST1"
+FOLDER = "TEST2"
 % Read Table
 try
     rmdir(FOLDER,'s');
 end
-T = readtable("Analisys.xlsx");
+T = readtable("Analisys2.xlsx");
 size_table = size(T);
-num_images = size_table(1)-1; % Title (First row contains column headers)
+num_images = size_table(1); % Title (First row contains column headers)
 mkdir(FOLDER)
 
-for i=2:num_images
+for i=1:num_images
     image = char(T(i,1).NOM);  % Get the image name from the table
-    full_name = "IMATGES_INPUT/"+image;  % Define full path to the image
+    full_name = "IMATGE_INPUT_v2/"+image;  % Define full path to the image
     original = imread(full_name);  % Read the image
     
     % Call the detection functions for STOP and CEDA signs
@@ -95,7 +95,18 @@ function [number] = DetectSTOPSign(original)
     % Detect if the word "STOP" is present in the image
     [index_detected_stop] = DetectSTOPWordFromImages(Images);
 
-    merged_detection = index_detected_stop | index_detected_octagon;  % Combine the detections
+    % Assign weights to each detection
+    weight_stop = 0.7;    % Weight for "stop" detection
+    weight_octagon = 0.3; % Weight for "octagon" detection
+    
+    % Combine the weighted detections
+    % Convert booleans to doubles for computation
+    weighted_combination = (double(index_detected_stop) * weight_stop) + ...
+                           (double(index_detected_octagon) * weight_octagon);
+
+    % Apply a threshold to decide the final merged_detection
+    threshold = 0.5; % Define a threshold for the combined weighted detection
+    merged_detection = weighted_combination >= threshold;
 
     if(any(merged_detection))  % If any of the detection conditions are met
         num = size(merged_detection);
@@ -120,69 +131,63 @@ function [number] = DetectSTOPSign(original)
         disp('No stop sign present')
     end
 end
-
-% Function to detect red areas (used for detecting STOP signs)
 function [mask, Images] = DetectRedArea(original)
-    % DetectRedArea detects the red areas of a stop sign in an image.
+    % DetectRedArea detects red areas in the image using Lab color space.
     % Inputs:
     %   - original: RGB input image
     % Outputs:
-    %   - mask: Logical mask for the detected red areas
-    %   - Images: Struct array containing cropped images of detected regions
+    %   - mask: Logical mask for detected red areas
+    %   - Images: Struct array with cropped images of detected regions
 
-    % Pad image to avoid conflicts with index when cropping
+    % Pad image to avoid conflicts when cropping
     original = padarray(original, [1 1], 1, 'both');
 
-    % Smooth the image slightly to reduce noise
+    % Smooth the image to reduce noise
     filtered = imgaussfilt(original, 1);
 
-    % Convert the image to HSV color space
-    hsvImage = rgb2hsv(filtered);
+    % Convert the image to Lab color space
+    labImage = rgb2lab(filtered);
 
-    % Define thresholds for red in HSV (more specific range)
-    % Red has two ranges in Hue: 0-10 and 160-180 (on a scale of 0-180 in MATLAB)
-    lowerRed1 = [0, 0.6, 0.3]; % Increased saturation and value thresholds
-    upperRed1 = [10/360, 1, 1]; % Scale Hue to 0-1 for im2double
-    lowerRed2 = [160/360, 0.6, 0.3];
-    upperRed2 = [1, 1, 1];
+    % Extract Lab channels
+    L = labImage(:,:,1);    % Lightness
+    aChannel = labImage(:,:,2); % Red/Green channel
+    bChannel = labImage(:,:,3); % Blue/Yellow channel
 
-    % Create masks for both red ranges
-    mask1 = (hsvImage(:,:,1) >= lowerRed1(1)) & (hsvImage(:,:,1) <= upperRed1(1)) & ...
-            (hsvImage(:,:,2) >= lowerRed1(2)) & (hsvImage(:,:,3) >= lowerRed1(3));
+    % Threshold for red areas in Lab space
+    % Focus on strong red values in the a* channel
+    aThreshold = aChannel > 20; % Adjusted for stronger reds
+    bThreshold = bChannel > -1 & bChannel < 1; % Reduce interference from yellows/blues
+    lThreshold = L > 20 & L < 85; % Exclude very bright or very dark areas
+    
+    % Combine thresholds to create a binary mask
+    selectedmask_raw = aThreshold & ~bThreshold; 
 
-    mask2 = (hsvImage(:,:,1) >= lowerRed2(1)) & (hsvImage(:,:,1) <= upperRed2(1)) & ...
-            (hsvImage(:,:,2) >= lowerRed2(2)) & (hsvImage(:,:,3) >= lowerRed2(3));
+    figure; imshow(aThreshold, []); title('a* Threshold');
+    figure; imshow(~bThreshold, []); title('b* Threshold');
+    figure; imshow(lThreshold, []); title('L Threshold');
+    figure; imshow(selectedmask_raw, []); title('Combined Mask');
 
-    % Combine the two red masks
-    selectedmask_raw = mask1 | mask2;
-
-    % Perform morphological dilation to combine regions
-    se = strel('disk', 10);  % Structural element for dilation
+    % Morphological processing to clean the mask
+    se = strel('disk', 2); % Adjust size for noise level
     full_mask = imdilate(selectedmask_raw, se);
+    full_mask = bwareaopen(full_mask, 300); % Remove small noisy areas
+    full_mask = imfill(full_mask, 'holes'); imshow(full_mask)
 
-    % Remove small noise areas based on area size
-    full_mask = bwareaopen(full_mask, 500);
-
-    % Further morphological cleaning (optional)
-    % You can try erode to remove extra regions or use 'imfill' if there are holes
-    full_mask = imfill(full_mask, 'holes');
-    full_mask = imerode(full_mask, se);  % Erosion to clean up small regions
-
-    % Label the connected components
+    % Label connected components
     Ilabel = bwlabel(full_mask);
-    stats_stop = regionprops(Ilabel, 'centroid', 'Area', 'BoundingBox');
+    stats_stop = regionprops(Ilabel, 'Centroid', 'Area', 'BoundingBox');
     count = 1;
 
     % Initialize output structure
     Images = struct('Image', {}, 'Info', {}, 'mask', {});
 
-    % Loop through the detected regions
+    % Process each detected region
     for i = 1:numel(stats_stop)
-        % Define area thresholds for selection
-        area_threshold = 0.3 * max(vertcat(stats_stop.Area));
+        % Area thresholds for region filtering
+        area_threshold = 0.1 * max([stats_stop.Area]); % Dynamic threshold
         max_threshold = 400000;
 
-        if (stats_stop(i).Area >= area_threshold && stats_stop(i).Area <= max_threshold)
+        if stats_stop(i).Area >= area_threshold && stats_stop(i).Area <= max_threshold
             % Extract centroid and bounding box information
             centroid = stats_stop(i).Centroid;
             x = centroid(1);
@@ -190,42 +195,135 @@ function [mask, Images] = DetectRedArea(original)
             bb = stats_stop(i).BoundingBox;
             area_to_struct = stats_stop(i).Area;
 
-            % Store the information in a structure
-            f1 = figure(100);
-            R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3,'Visible','off');
-
-            % Save image info to structure
-            info_array = [x y bb area_to_struct];
-            tolerance = 10; % Adjust this value based on the desired tolerance (in pixels)
-            
-            % Obtain the regions to crop the detected area
-            x_start = ceil(R.Position(1));
-            x_end = ceil(R.Position(1) + R.Position(3));
-            y_start = ceil(R.Position(2));
-            y_end = ceil(R.Position(2) + R.Position(4));
-            close(f1)
-
-            % Apply tolerance for cropping the detected area
-            x_start = max(1, x_start - tolerance);
-            x_end = min(size(original, 2), x_end + tolerance);
-            y_start = max(1, y_start - tolerance);
-            y_end = min(size(original, 1), y_end + tolerance);
+            % Define bounding box with tolerance for cropping
+            tolerance = 10; % Adjust as needed
+            x_start = max(1, ceil(bb(1)) - tolerance);
+            x_end = min(size(original, 2), ceil(bb(1) + bb(3)) + tolerance);
+            y_start = max(1, ceil(bb(2)) - tolerance);
+            y_end = min(size(original, 1), ceil(bb(2) + bb(4)) + tolerance);
 
             % Crop the detected region
             Cropped = original(y_start:y_end, x_start:x_end, :);
-            Cropped_mask = full_mask(y_start:y_end, x_start:x_end, :);
+            Cropped_mask = full_mask(y_start:y_end, x_start:x_end);
 
-            % Save the cropped image and mask
+            % Save the cropped image and mask to the output structure
             Images(count).Image = Cropped;
-            Images(count).Info = info_array;
+            Images(count).Info = [x, y, bb, area_to_struct];
             Images(count).mask = Cropped_mask;
 
-            % Increment counter
+            % Increment the counter
             count = count + 1;
         end
     end
+
+    % Return the final mask
     mask = full_mask;
 end
+% % Function to detect red areas (used for detecting STOP signs)
+% function [mask, Images] = DetectRedArea(original)
+%     % DetectRedArea detects the red areas of a stop sign in an image.
+%     % Inputs:
+%     %   - original: RGB input image
+%     % Outputs:
+%     %   - mask: Logical mask for the detected red areas
+%     %   - Images: Struct array containing cropped images of detected regions
+% 
+%     % Pad image to avoid conflicts with index when cropping
+%     original = padarray(original, [1 1], 1, 'both');
+% 
+%     % Smooth the image slightly to reduce noise
+%     filtered = imgaussfilt(original, 1);
+% 
+%     % Convert the image to HSV color space
+%     hsvImage = rgb2hsv(filtered);
+% 
+%     % Define thresholds for red in HSV (more specific range)
+%     % Red has two ranges in Hue: 0-10 and 160-180 (on a scale of 0-180 in MATLAB)
+%     lowerRed1 = [0, 0.6, 0.3]; % Increased saturation and value thresholds
+%     upperRed1 = [10/360, 1, 1]; % Scale Hue to 0-1 for im2double
+%     lowerRed2 = [160/360, 0.6, 0.3];
+%     upperRed2 = [1, 1, 1];
+% 
+%     % Create masks for both red ranges
+%     mask1 = (hsvImage(:,:,1) >= lowerRed1(1)) & (hsvImage(:,:,1) <= upperRed1(1)) & ...
+%             (hsvImage(:,:,2) >= lowerRed1(2)) & (hsvImage(:,:,3) >= lowerRed1(3));
+% 
+%     mask2 = (hsvImage(:,:,1) >= lowerRed2(1)) & (hsvImage(:,:,1) <= upperRed2(1)) & ...
+%             (hsvImage(:,:,2) >= lowerRed2(2)) & (hsvImage(:,:,3) >= lowerRed2(3));
+% 
+%     % Combine the two red masks
+%     selectedmask_raw = mask1 | mask2;
+% 
+%     % Perform morphological dilation to combine regions
+%     se = strel('disk', 10);  % Structural element for dilation
+%     full_mask = imdilate(selectedmask_raw, se);
+% 
+%     % Remove small noise areas based on area size
+%     full_mask = bwareaopen(full_mask, 500);
+% 
+%     % Further morphological cleaning (optional)
+%     % You can try erode to remove extra regions or use 'imfill' if there are holes
+%     full_mask = imfill(full_mask, 'holes');
+%     full_mask = imerode(full_mask, se);  % Erosion to clean up small regions
+% 
+%     % Label the connected components
+%     Ilabel = bwlabel(full_mask);
+%     stats_stop = regionprops(Ilabel, 'centroid', 'Area', 'BoundingBox');
+%     count = 1;
+% 
+%     % Initialize output structure
+%     Images = struct('Image', {}, 'Info', {}, 'mask', {});
+% 
+%     % Loop through the detected regions
+%     for i = 1:numel(stats_stop)
+%         % Define area thresholds for selection
+%         area_threshold = 0.3 * max(vertcat(stats_stop.Area));
+%         max_threshold = 400000;
+% 
+%         if (stats_stop(i).Area >= area_threshold && stats_stop(i).Area <= max_threshold)
+%             % Extract centroid and bounding box information
+%             centroid = stats_stop(i).Centroid;
+%             x = centroid(1);
+%             y = centroid(2);
+%             bb = stats_stop(i).BoundingBox;
+%             area_to_struct = stats_stop(i).Area;
+% 
+%             % Store the information in a structure
+%             f1 = figure(100);
+%             R = rectangle('Position',bb,'EdgeColor','b','LineWidth',3,'Visible','off');
+% 
+%             % Save image info to structure
+%             info_array = [x y bb area_to_struct];
+%             tolerance = 10; % Adjust this value based on the desired tolerance (in pixels)
+% 
+%             % Obtain the regions to crop the detected area
+%             x_start = ceil(R.Position(1));
+%             x_end = ceil(R.Position(1) + R.Position(3));
+%             y_start = ceil(R.Position(2));
+%             y_end = ceil(R.Position(2) + R.Position(4));
+%             close(f1)
+% 
+%             % Apply tolerance for cropping the detected area
+%             x_start = max(1, x_start - tolerance);
+%             x_end = min(size(original, 2), x_end + tolerance);
+%             y_start = max(1, y_start - tolerance);
+%             y_end = min(size(original, 1), y_end + tolerance);
+% 
+%             % Crop the detected region
+%             Cropped = original(y_start:y_end, x_start:x_end, :);
+%             Cropped_mask = full_mask(y_start:y_end, x_start:x_end, :);
+% 
+%             % Save the cropped image and mask
+%             Images(count).Image = Cropped;
+%             Images(count).Info = info_array;
+%             Images(count).mask = Cropped_mask;
+% 
+%             % Increment counter
+%             count = count + 1;
+%         end
+%     end
+%     mask = full_mask;
+% end
 
 
 
@@ -234,9 +332,9 @@ end
 function [index_detected] = DetectSTOPWordFromImages(Images)
     % Determine the number of images in the input
     num_images = size(Images); 
+    index_detected = false*ones(1,num_images(2))
     % If there are no images, return false
-    if num_images < 1
-        index_detected = false;
+    if num_images(2) < 1
         return;
     end
     % Loop through each image
@@ -433,8 +531,8 @@ function [index_array] = DetectOctagon(Images)
     
     % Convert the image to grayscale and smooth it
     num_images = size(Images);
-    if num_images < 1
-        index_array = false;
+    index_array = false*ones(1,num_images(2))
+    if num_images(2) < 1
         return;
     end
     
@@ -543,8 +641,8 @@ function [array_detected] = DetectInvertedTriangle(Images)
     %   - array_detected: Logical array indicating if an inverted triangle is detected
 
     num_images = size(Images);
-    if num_images < 1
-        array_detected = false;
+    array_detected = false*ones(1,num_images(2))
+    if num_images(2) < 1
         return;
     end
     
